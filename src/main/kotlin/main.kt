@@ -26,35 +26,20 @@ fun main() {
             try {
                 val posts = getPosts(client)
                     .map { post ->
-                        InitPostState(post = post,
-                            commentsDeferred = async {
-                                getComments(client, post.id)
-                            },
-                            authorDeferred = async {
-                                getAuthor(client, post.authorId)
-                            }
-                        )
-                    }.map { initPostState ->
-                        val comments = initPostState.commentsDeferred.await()
-                        MiddlePostState(
-                            post = initPostState.post,
-                            commentsDeferred =
-                            comments.map { comment ->
-                                async {
-                                    CommentWithAuthor(comment, getAuthor(client, comment.authorId))
-                                }
-                            },
-                            authorDeferred = initPostState.authorDeferred
-                        )
-                    }.map { middlePostState ->
-                        val postAuthor = middlePostState.authorDeferred.await()
-                        val comments = middlePostState.commentsDeferred.awaitAll()
-                        ResultPost(
-                            post = middlePostState.post,
-                            comments = comments,
-                            author = postAuthor
-                        )
-                    }
+                        async {
+                            val commentsWithAuthor = getComments(client, post.id)
+                                .map { comment ->
+                                    async {
+                                        CommentWithAuthor(comment, getAuthor(client, comment.authorId))
+                                    }
+                                }.awaitAll()
+                            ResultPost(
+                                post = post,
+                                comments = commentsWithAuthor,
+                                author = getAuthor(client, post.authorId)
+                            )
+                        }
+                    }.awaitAll()
                 println(posts)
             } catch (e: Exception) {
                 e.printStackTrace()
